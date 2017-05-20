@@ -163,10 +163,31 @@
 
 &wled {
 	qcom,cons-sync-write-delay-us = <1000>;
+	/delete-property/ qcom,en-ext-pfet-sc-pro;
+	qcom,en-cabc;
 };
 
 &spmi_bus {
 	qcom,pm8953@0 {
+		qcom,leds@a100 {
+			status = "okay";
+			compatible = "qcom,leds-qpnp";
+			reg = <0xa100 0x100>;
+			label = "mpp";
+			qcom,led_mpp_2 {
+				label = "mpp";
+				linux,name = "button-backlight";
+				linux,default-trigger = "none";
+				qcom,default-state = "off";
+				qcom,max-current = <5>;
+				qcom,current-setting = <5>;
+				qcom,id = <6>;
+				qcom,mode = "manual";
+				qcom,source-sel = <1>;
+				qcom,mode-ctrl = <0x61>;
+			};
+		};
+	
 		qcom,power-on@800 {
 			qcom,store-hard-reset-reason;
 			qcom,pon_1 {
