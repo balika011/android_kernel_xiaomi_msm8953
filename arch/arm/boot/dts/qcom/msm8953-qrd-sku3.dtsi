@@ -111,64 +111,34 @@
 };
 
 &int_codec {
-	status = "disabled";
+	status = "ok";
 };
 
 &pm8953_diangu_dig {
-	status = "disabled";
+	status = "ok";
 };
 
 &pm8953_diangu_analog {
-	status = "disabled";
+	status = "ok";
 };
 
 &ext_codec {
-	status = "ok";
-	qcom,model = "msm8953-sku3-tasha-snd-card";
-
-	qcom,audio-routing =
-		"AIF4 VI", "MCLK",
-		"RX_BIAS", "MCLK",
-		"DMIC0", "MIC BIAS1",
-		"MIC BIAS1", "Digital Mic0",
-		"AMIC2", "MIC BIAS2",
-		"MIC BIAS2", "Headset Mic",
-		"DMIC2", "MIC BIAS3",
-		"MIC BIAS3", "Digital Mic2",
-		"MIC BIAS1", "MICBIAS_REGULATOR",
-		"MIC BIAS2", "MICBIAS_REGULATOR",
-		"MIC BIAS3", "MICBIAS_REGULATOR",
-		"SpkrLeft IN", "SPK1 OUT";
-
-	qcom,cdc-us-euro-gpios;
-
-	qcom,msm-mbhc-hphl-swh = <1>;
-
-	qcom,wsa-max-devs = <1>;
-	qcom,wsa-devs = <&wsa881x_211>, <&wsa881x_213>;
-	qcom,wsa-aux-dev-prefix = "SpkrLeft", "SpkrLeft";
+	status = "disabled";
 };
 
 &slim_msm {
-	status = "ok";
+	status = "disabled";
 };
 
 &dai_slim {
-	status = "ok";
-};
-
-&wcd9xxx_intc {
-	status = "ok";
+	status = "disabled";
 };
 
 &clock_audio {
-	status = "ok";
+	status = "disabled";
 };
 
 &wcd9335 {
-	status = "ok";
+	status = "disabled";
 };
 
-&wcd_rst_gpio {
-	status = "ok";
-};
