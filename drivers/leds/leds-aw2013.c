@@ -40,7 +40,7 @@
 #define AW_LED_BREATHE_MODE_MASK	0x10
 #define AW_LED_RESET_MASK		0x55
 
-#define AW_LED_RESET_DELAY		8
+#define AW_LED_RESET_DELAY		2000
 #define AW2013_VDD_MIN_UV		2600000
 #define AW2013_VDD_MAX_UV		3300000
 #define AW2013_VI2C_MIN_UV		1800000
@@ -340,6 +340,18 @@ static ssize_t aw2013_led_time_show(struct device *dev,
 			led->pdata->fall_time_ms, led->pdata->off_time_ms);
 }
 
+static ssize_t status_show(struct device *dev,
+			struct device_attribute *attr, char *buf)
+{
+	u8 val = 0;
+	struct led_classdev *led_cdev = dev_get_drvdata(dev);
+	struct aw2013_led *led =
+			container_of(led_cdev, struct aw2013_led, cdev);
+	aw2013_read(led, AW_REG_LED_ENABLE, &val);
+	return snprintf(buf, PAGE_SIZE, "%d\n",
+			val);
+}
+
 static ssize_t aw2013_led_time_store(struct device *dev,
 			     struct device_attribute *attr,
 			     const char *buf, size_t len)
@@ -369,10 +381,12 @@ static ssize_t aw2013_led_time_store(struct device *dev,
 
 static DEVICE_ATTR(blink, 0664, NULL, aw2013_store_blink);
 static DEVICE_ATTR(led_time, 0664, aw2013_led_time_show, aw2013_led_time_store);
+static DEVICE_ATTR(status, 0664, status_show, NULL);
 
 static struct attribute *aw2013_led_attributes[] = {
 	&dev_attr_blink.attr,
 	&dev_attr_led_time.attr,
+	&dev_attr_status.attr,
 	NULL,
 };
 
@@ -385,7 +399,7 @@ static int aw_2013_check_chipid(struct aw2013_led *led)
 	u8 val;
 
 	aw2013_write(led, AW_REG_RESET, AW_LED_RESET_MASK);
-	usleep(AW_LED_RESET_DELAY);
+	udelay(AW_LED_RESET_DELAY);
 	aw2013_read(led, AW_REG_RESET, &val);
 	if (val == AW2013_CHIPID)
 		return 0;
