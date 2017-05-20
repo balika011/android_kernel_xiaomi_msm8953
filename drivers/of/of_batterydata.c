@@ -315,7 +315,7 @@ struct device_node *of_batterydata_get_best_profile(
 		const char *psy_name,  const char  *batt_type)
 {
 	struct batt_ids batt_ids;
-	struct device_node *node, *best_node = NULL;
+	struct device_node *node, *best_node = NULL, *default_node = NULL;
 	struct power_supply *psy;
 	const char *battery_type = NULL;
 	union power_supply_propval ret = {0, };
@@ -377,6 +377,8 @@ struct device_node *of_batterydata_get_best_profile(
 				 * and also if the limits are in range
 				 * before selecting the best node.
 				 */
+				if (batt_ids.kohm[i] == 82)
+					default_node = node;
 				if ((delta < best_delta || !best_node)
 					&& in_range) {
 					best_node = node;
@@ -387,17 +389,20 @@ struct device_node *of_batterydata_get_best_profile(
 		}
 	}
 
-	if (best_node == NULL) {
-		pr_err("No battery data found\n");
-		return best_node;
-	}
-
 	/* check that profile id is in range of the measured batt_id */
-	if (abs(best_id_kohm - batt_id_kohm) >
+	if (best_node && abs(best_id_kohm - batt_id_kohm) >
 			((best_id_kohm * id_range_pct) / 100)) {
 		pr_err("out of range: profile id %d batt id %d pct %d",
 			best_id_kohm, batt_id_kohm, id_range_pct);
 		return NULL;
+	}
+
+	if (!best_node)
+		best_node = default_node;
+
+	if (best_node == NULL) {
+		pr_err("No battery data found\n");
+		return best_node;
 	}
 
 	rc = of_property_read_string(best_node, "qcom,battery-type",
