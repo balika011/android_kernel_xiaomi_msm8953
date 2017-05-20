@@ -932,35 +932,6 @@ void msm_isp_increment_frame_id(struct vfe_device *vfe_dev,
 		flags);
 }
 
-static void msm_isp_update_pd_stats_idx(struct vfe_device *vfe_dev,
-	enum msm_vfe_input_src frame_src)
-{
-	struct msm_vfe_axi_stream *pd_stream_info = NULL;
-	uint32_t pingpong_status = 0, pingpong_bit = 0;
-	struct msm_isp_buffer *done_buf = NULL;
-
-	if (frame_src < VFE_RAW_0 || frame_src >  VFE_RAW_2)
-		return;
-
-	pd_stream_info = &(vfe_dev->common_data->dual_vfe_res->
-		axi_data[vfe_dev->pdev->id]->
-		stream_info[RDI_INTF_0 + frame_src - VFE_RAW_0]);
-
-	if (pd_stream_info && (pd_stream_info->state == ACTIVE) &&
-		(pd_stream_info->rdi_input_type ==
-		MSM_CAMERA_RDI_PDAF)) {
-		pingpong_status = vfe_dev->hw_info->vfe_ops.axi_ops.
-					get_pingpong_status(vfe_dev);
-		pingpong_bit = ((pingpong_status >>
-			pd_stream_info->wm[0]) & 0x1);
-		done_buf = pd_stream_info->buf[pingpong_bit];
-		if (done_buf)
-			vfe_dev->pd_buf_idx = done_buf->buf_idx;
-		else
-			vfe_dev->pd_buf_idx = 0xF;
-	}
-}
-
 void msm_isp_notify(struct vfe_device *vfe_dev, uint32_t event_type,
 	enum msm_vfe_input_src frame_src, struct msm_isp_timestamp *ts)
 {
@@ -1068,12 +1039,6 @@ void msm_isp_notify(struct vfe_device *vfe_dev, uint32_t event_type,
 					&event_data.u.sof_info);
 			}
 		}
-		/*
-		 * Get and store the buf idx for PD stats
-		 * this is to send the PD stats buffer address
-		 * in BF stats done.
-		 */
-		msm_isp_update_pd_stats_idx(vfe_dev, frame_src);
 		break;
 
 	default:
@@ -1237,7 +1202,7 @@ int msm_isp_request_axi_stream(struct vfe_device *vfe_dev, void *arg)
 		return -EINVAL;
 	}
 
-	stream_info->rdi_input_type = stream_cfg_cmd->rdi_input_type;
+	stream_info->memory_input = stream_cfg_cmd->memory_input;
 	vfe_dev->reg_update_requested &=
 		~(BIT(SRC_TO_INTF(stream_info->stream_src)));
 
@@ -2265,8 +2230,7 @@ static void msm_isp_update_camif_output_count(
 /*Factor in Q2 format*/
 #define ISP_DEFAULT_FORMAT_FACTOR 6
 #define ISP_BUS_UTILIZATION_FACTOR 6
-int msm_isp_update_stream_bandwidth(struct vfe_device *vfe_dev,
-	enum msm_vfe_hw_state hw_state)
+static int msm_isp_update_stream_bandwidth(struct vfe_device *vfe_dev)
 {
 	int i, rc = 0, frame_src, ms_type;
 	struct msm_vfe_axi_stream *stream_info;
@@ -2282,11 +2246,6 @@ int msm_isp_update_stream_bandwidth(struct vfe_device *vfe_dev,
 		frame_src = SRC_TO_INTF(stream_info->stream_src);
 		ms_type = vfe_dev->axi_data.src_info[frame_src].
 			dual_hw_ms_info.dual_hw_ms_type;
-		if (hw_state == HW_STATE_SLEEP) {
-			rc = msm_isp_update_bandwidth(
-				ISP_VFE0 + vfe_dev->pdev->id, 0, 0);
-			return rc;
-		}
 
 		if (stream_info->state == ACTIVE ||
 			stream_info->state == START_PENDING) {
@@ -2913,7 +2872,7 @@ static int msm_isp_start_axi_stream(struct vfe_device *vfe_dev,
 			}
 		}
 	}
-	msm_isp_update_stream_bandwidth(vfe_dev, stream_cfg_cmd->hw_state);
+	msm_isp_update_stream_bandwidth(vfe_dev);
 	vfe_dev->hw_info->vfe_ops.axi_ops.reload_wm(vfe_dev,
 		vfe_dev->vfe_base, wm_reload_mask);
 	msm_isp_update_camif_output_count(vfe_dev, stream_cfg_cmd);
@@ -3102,7 +3061,7 @@ static int msm_isp_stop_axi_stream(struct vfe_device *vfe_dev,
 	}
 
 	msm_isp_update_camif_output_count(vfe_dev, stream_cfg_cmd);
-	msm_isp_update_stream_bandwidth(vfe_dev, stream_cfg_cmd->hw_state);
+	msm_isp_update_stream_bandwidth(vfe_dev);
 
 	for (i = 0; i < stream_cfg_cmd->num_streams; i++) {
 		stream_info = &axi_data->stream_info[

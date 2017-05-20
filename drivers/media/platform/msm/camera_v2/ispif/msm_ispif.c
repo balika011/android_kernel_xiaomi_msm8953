@@ -847,23 +847,6 @@ static uint16_t msm_ispif_get_cids_mask_from_cfg(
 
 	return cids_mask;
 }
-
-static uint16_t msm_ispif_get_right_cids_mask_from_cfg(
-	struct msm_ispif_right_param_entry *entry, int num_cids)
-{
-	int i;
-	uint16_t cids_mask = 0;
-
-	BUG_ON(!entry);
-
-	for (i = 0; i < num_cids && i < MAX_CID_CH_v2; i++) {
-		if (entry->cids[i] < CID_MAX)
-			cids_mask |= (1 << entry->cids[i]);
-	}
-
-	return cids_mask;
-}
-
 static int msm_ispif_config(struct ispif_device *ispif,
 	void *data)
 {
@@ -926,11 +909,6 @@ static int msm_ispif_config(struct ispif_device *ispif,
 		if (ispif->csid_version >= CSID_VERSION_V30) {
 			msm_ispif_select_clk_mux(ispif, intftype,
 				params->entries[i].csid, vfe_intf);
-			if (intftype == PIX0 && params->stereo_enable &&
-			    params->right_entries[i].csid < CSID_MAX)
-				msm_ispif_select_clk_mux(ispif, PIX1,
-					params->right_entries[i].csid,
-					vfe_intf);
 		}
 
 		rc = msm_ispif_validate_intf_status(ispif, intftype, vfe_intf);
@@ -942,26 +920,12 @@ static int msm_ispif_config(struct ispif_device *ispif,
 
 		msm_ispif_sel_csid_core(ispif, intftype,
 			params->entries[i].csid, vfe_intf);
-		if (intftype == PIX0 && params->stereo_enable &&
-		    params->right_entries[i].csid < CSID_MAX)
-			/* configure right stereo csid */
-			msm_ispif_sel_csid_core(ispif, PIX1,
-				params->right_entries[i].csid, vfe_intf);
 
 		cid_mask = msm_ispif_get_cids_mask_from_cfg(
 				&params->entries[i]);
 		msm_ispif_enable_intf_cids(ispif, intftype,
 			cid_mask, vfe_intf, 1);
-		if (params->stereo_enable)
-			cid_right_mask = msm_ispif_get_right_cids_mask_from_cfg(
-					&params->right_entries[i],
-					params->entries[i].num_cids);
-		else
-			cid_right_mask = 0;
-		if (cid_right_mask && params->stereo_enable)
-			/* configure right stereo cids */
-			msm_ispif_enable_intf_cids(ispif, PIX1,
-				cid_right_mask, vfe_intf, 1);
+		cid_right_mask = 0;
 		if (params->entries[i].crop_enable)
 			msm_ispif_enable_crop(ispif, intftype, vfe_intf,
 				params->entries[i].crop_start_pixel,
@@ -992,26 +956,6 @@ static int msm_ispif_config(struct ispif_device *ispif,
 		ISPIF_IRQ_GLOBAL_CLEAR_CMD_ADDR);
 
 	return rc;
-}
-
-static void msm_ispif_config_stereo(struct ispif_device *ispif,
-	struct msm_ispif_param_data_ext *params) {
-
-	int i;
-	enum msm_ispif_vfe_intf vfe_intf;
-
-	for (i = 0; i < params->num; i++) {
-		if (params->entries[i].intftype == PIX0 &&
-		    params->stereo_enable &&
-		    params->right_entries[i].csid < CSID_MAX) {
-			vfe_intf = params->entries[i].vfe_intf;
-			msm_camera_io_w_mb(0x3,
-				ispif->base + ISPIF_VFE_m_OUTPUT_SEL(vfe_intf));
-			msm_camera_io_w_mb(STEREO_DEFAULT_3D_THRESHOLD,
-				ispif->base +
-					ISPIF_VFE_m_3D_THRESHOLD(vfe_intf));
-		}
-	}
 }
 
 static void msm_ispif_intf_cmd(struct ispif_device *ispif, uint32_t cmd_bits,
@@ -1060,19 +1004,6 @@ static void msm_ispif_intf_cmd(struct ispif_device *ispif, uint32_t cmd_bits,
 				ispif->applied_intf_cmd[vfe_intf].intf_cmd |=
 					(cmd_bits << (vc * 2 + intf_type * 8));
 			}
-			if (intf_type == PIX0 && params->stereo_enable &&
-			    params->right_entries[i].cids[k] < CID_MAX) {
-				cid = params->right_entries[i].cids[k];
-				vc = cid / 4;
-
-				/* fill right stereo command */
-				/* zero 2 bits */
-				ispif->applied_intf_cmd[vfe_intf].intf_cmd &=
-					~(0x3 << (vc * 2 + PIX1 * 8));
-				/* set cmd bits */
-				ispif->applied_intf_cmd[vfe_intf].intf_cmd |=
-					(cmd_bits << (vc * 2 + PIX1 * 8));
-			}
 		}
 		/* cmd for PIX0, PIX1, RDI0, RDI1 */
 		if (ispif->applied_intf_cmd[vfe_intf].intf_cmd != 0xFFFFFFFF)
@@ -1117,15 +1048,6 @@ static int msm_ispif_stop_immediately(struct ispif_device *ispif,
 			&params->entries[i]);
 		msm_ispif_enable_intf_cids(ispif, params->entries[i].intftype,
 			cid_mask, params->entries[i].vfe_intf, 0);
-		if (params->stereo_enable) {
-			cid_mask = msm_ispif_get_right_cids_mask_from_cfg(
-					&params->right_entries[i],
-					params->entries[i].num_cids);
-			if (cid_mask)
-				msm_ispif_enable_intf_cids(ispif,
-					params->entries[i].intftype, cid_mask,
-					params->entries[i].vfe_intf, 0);
-		}
 	}
 
 	return rc;
@@ -1148,7 +1070,6 @@ static int msm_ispif_start_frame_boundary(struct ispif_device *ispif,
 		rc = -EINVAL;
 		return rc;
 	}
-	msm_ispif_config_stereo(ispif, params);
 	msm_ispif_intf_cmd(ispif, ISPIF_INTF_CMD_ENABLE_FRAME_BOUNDARY, params);
 
 	return rc;
@@ -1218,13 +1139,7 @@ static int msm_ispif_stop_frame_boundary(struct ispif_device *ispif,
 	for (i = 0; i < params->num; i++) {
 		cid_mask =
 			msm_ispif_get_cids_mask_from_cfg(&params->entries[i]);
-		if (params->stereo_enable)
-			cid_right_mask =
-				msm_ispif_get_right_cids_mask_from_cfg(
-						&params->right_entries[i],
-						params->entries[i].num_cids);
-		else
-			cid_right_mask = 0;
+		cid_right_mask = 0;
 		vfe_intf = params->entries[i].vfe_intf;
 
 		switch (params->entries[i].intftype) {
@@ -1723,7 +1638,6 @@ static long msm_ispif_cmd(struct v4l2_subdev *sd, void *arg)
 				memcpy(&params.entries[i],
 					&pcdata->params.entries[i],
 					sizeof(struct msm_ispif_params_entry));
-			params.stereo_enable = 0;
 			rc = msm_ispif_dispatch_cmd(pcdata->cfg_type, ispif,
 							&params);
 		}
