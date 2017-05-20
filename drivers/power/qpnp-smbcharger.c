@@ -509,6 +509,12 @@ module_param_named(
 			pr_debug_ratelimited(fmt, ##__VA_ARGS__);	\
 	} while (0)
 
+extern void ist30xx_set_ta_mode(bool mode);
+extern void tpd_usb_plugin(bool mode);
+extern void gtp_usb_plugin(bool mode);
+
+int set_usb_charge_mode_par = 0;
+
 static int smbchg_read(struct smbchg_chip *chip, u8 *val,
 			u16 addr, int count)
 {
@@ -4842,6 +4848,14 @@ static void handle_usb_removal(struct smbchg_chip *chip)
 	struct power_supply *parallel_psy = get_parallel_psy(chip);
 	int rc;
 
+	if (set_usb_charge_mode_par == 1) {
+		ist30xx_set_ta_mode(0);
+	} else if (set_usb_charge_mode_par == 2) {
+		tpd_usb_plugin(0);
+	} else if (set_usb_charge_mode_par == 3) {
+		gtp_usb_plugin(0);
+	}
+
 	pr_smb(PR_STATUS, "triggered\n");
 	smbchg_aicl_deglitch_wa_check(chip);
 	/* Clear the OV detected status set before */
@@ -4917,6 +4931,14 @@ static void handle_usb_insertion(struct smbchg_chip *chip)
 	enum power_supply_type usb_supply_type;
 	int rc;
 	char *usb_type_name = "null";
+
+	if (set_usb_charge_mode_par == 1) {
+		ist30xx_set_ta_mode(1);
+	} else if (set_usb_charge_mode_par == 2) {
+		tpd_usb_plugin(1);
+	} else if (set_usb_charge_mode_par == 3) {
+		gtp_usb_plugin(1);
+	}
 
 	pr_smb(PR_STATUS, "triggered\n");
 	/* usb inserted */
